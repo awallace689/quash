@@ -27,7 +27,6 @@ void echo(std::string s)
 }
 
 
-
 int main()
 {
   echo("Hello...\n");
