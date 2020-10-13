@@ -1,3 +1,8 @@
+/*
+ * Compile with 'make quash'.
+ */
+
+
 #include <string>
 #include <iostream>
 
@@ -22,10 +27,12 @@ void echo(std::string s)
 }
 
 
-// compile with 'make quash'
+
 int main()
 {
-  echo("Hello, " + prompt() + "!\n");
+  echo("Hello...\n");
+  auto name = prompt();
+  echo(name + "!\n");
 
   // do stuff
 
