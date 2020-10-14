@@ -13,7 +13,7 @@
 
 
 std::string TITLE = 
-" #####\n"                              
+"\n #####\n"                              
 "#     # #    #   ##    ####  #    #\n"
 "#     # #    #  #  #  #      #    #\n" 
 "#     # #    # #    #  ####  ######\n"
@@ -21,14 +21,14 @@ std::string TITLE =
 "#    #  #    # #    # #    # #    #\n"
 "####  #  ####  #    #  ####  #    #\n";
 
-// Terminal prompt string
+// Terminal prompt string. Can convert to function once PWD is defined.
 std::string PROMPT_PREFIX = "<put pwd here> $ ";
 
 
-// Enum used in switch for passing input string to proper handler.
+// Used in handleOp's switch to pass input string to its corresponding set of instructions.
 enum QuashOperation
 {
-  Init = 0, // Couldn't figure out how else to initialize 'op' in the main loop
+  Init = 0, // Couldn't figure out how else to initialize 'op' in the main loop.
   Error = 1,
   Exit = 2,
   
@@ -83,8 +83,8 @@ bool isExitCommand(std::string in)
 }
 
 
-// Examine user input string to determine what operation handler 
-// the string should be passed to.
+// Examine user input string to determine what QuashOperation 
+// the string corresponds with.
 QuashOperation getCommand(std::string in)
 {
   if (isExitCommand(in))
@@ -96,12 +96,21 @@ QuashOperation getCommand(std::string in)
 }
 
 
-void handleOp(QuashOperation op, std::string* argv)
+// Execute some sequence of code depending on what the operation is.
+void handleOp(QuashOperation op, std::string input)
 {
   switch(op)
   {
-    case Exit:
+    case Error:
+      echo("Invalid input.\n\n");
       break;
+
+    case Exit:
+      echo("Exiting...\n\n");
+      break;
+
+    //case SpawnProcess could handle spawning a new process with parameters
+    // extracted from string 'input'.
   }
 }
 
@@ -120,11 +129,12 @@ int main()
   QuashOperation op = Init;
   echo(TITLE + "\n\n\n\n\n\n");
 
+  // The run loop. Get input, determine what operation was specified, run (handle) the operation.
   while (op != Exit)
   {
     std::string uin = prompt();
     op = getCommand(uin);
-    // handle op
+    handleOp(op, uin);
   }
 
   return 0;
