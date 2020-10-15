@@ -78,7 +78,7 @@ bool isExitCommand(std::string in)
  **************************************************/
 
 /**************************************************
- * Quash Process Input Handling
+ * Quash Process Operation Handling
  **************************************************/
 
 // Handle 'Error' op in runOp switch
@@ -100,7 +100,7 @@ void handleError(std::string input)
 }
 
 /**************************************************
- * END Quash Process Input Handling
+ * END Quash Process Operation Handling
  **************************************************/
 
 /**************************************************
