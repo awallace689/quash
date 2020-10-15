@@ -122,10 +122,6 @@ QuashOperation getOp(std::string in)
 // Execute some sequence of code depending on what the operation is.
 void runOp(QuashOperation op, std::string input)
 {
-  // initialize variables used in switch cause C++ gets mad.
-  std::string command;
-  size_t spacePos;
-
   switch (op)
   {
   case Error:
