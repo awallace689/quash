@@ -1,5 +1,6 @@
 # ADDED MANUALLY
 quash
+.vscode/*
 .vscode/
 .DS_STORE
 
