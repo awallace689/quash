@@ -1,5 +1,7 @@
 # ADDED MANUALLY
 quash
+.vscode/
+.DS_STORE
 
 # Prerequisites
 *.d
