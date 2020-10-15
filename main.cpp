@@ -115,6 +115,7 @@ QuashOperation getOp(std::string in)
   {
     return Exit;
   }
+  // else if (isSpawnProcess(in)) {...} or something else
 
   return Error;
 }
@@ -132,7 +133,7 @@ void runOp(QuashOperation op, std::string input)
     echo("Exiting...\n");
     break;
 
-    //case SpawnProcess could handle spawning a new process with parameters
+    // case SpawnProcess: could handle spawning a new process with parameters
     // extracted from string 'input'.
   }
 }
