@@ -21,7 +21,7 @@ std::string TITLE =
 // Terminal prompt string. Can convert to function once PWD is defined.
 std::string PROMPT_PREFIX = "<put pwd here> $ ";
 
-// Used in handleOp's switch to pass input string to its corresponding set of instructions.
+// Used in runOp's switch to pass input string to its corresponding set of instructions.
 enum QuashOperation
 {
   Init = 0, // Couldn't figure out how else to initialize 'op' in the main loop.
@@ -45,7 +45,7 @@ std::string prompt()
   std::string user_in;
 
   std::cout << PROMPT_PREFIX;
-  std::cin >> user_in;
+  std::getline(std::cin, user_in);
 
   return user_in;
 }
@@ -60,7 +60,7 @@ void echo(std::string s)
  **************************************************/
 
 /**************************************************
- * Quash Process Input Handling
+ * Quash Process Input Parsing
  **************************************************/
 
 bool isExitCommand(std::string in)
@@ -73,9 +73,43 @@ bool isExitCommand(std::string in)
   return false;
 }
 
+/**************************************************
+ * END Quash Process Input Parsing
+ **************************************************/
+
+/**************************************************
+ * Quash Process Input Handling
+ **************************************************/
+
+// Handle 'Error' op in runOp switch
+void handleError(std::string input)
+{
+  std::string command;
+
+  auto spacePos = input.find(' ');
+  if (spacePos != std::string::npos)
+  {
+    command = input.substr(0, spacePos);
+  }
+  else
+  {
+    command = input;
+  }
+
+  echo("quash: command not found: " + command + " \n");
+}
+
+/**************************************************
+ * END Quash Process Input Handling
+ **************************************************/
+
+/**************************************************
+ * 'main' and Main Loop Steps
+ **************************************************/
+
 // Examine user input string to determine what QuashOperation
 // the string corresponds with.
-QuashOperation getCommand(std::string in)
+QuashOperation getOp(std::string in)
 {
   if (isExitCommand(in))
   {
@@ -86,30 +120,26 @@ QuashOperation getCommand(std::string in)
 }
 
 // Execute some sequence of code depending on what the operation is.
-void handleOp(QuashOperation op, std::string input)
+void runOp(QuashOperation op, std::string input)
 {
+  // initialize variables used in switch cause C++ gets mad.
+  std::string command;
+  size_t spacePos;
+
   switch (op)
   {
   case Error:
-    echo("Invalid input.\n\n");
+    handleError(input);
     break;
 
   case Exit:
-    echo("Exiting...\n\n");
+    echo("Exiting...\n");
     break;
 
     //case SpawnProcess could handle spawning a new process with parameters
     // extracted from string 'input'.
   }
 }
-
-/**************************************************
- * END Quash Process Input Handling
- **************************************************/
-
-/**************************************************
- * MAIN
- **************************************************/
 
 int main()
 {
@@ -120,8 +150,8 @@ int main()
   while (op != Exit)
   {
     std::string uin = prompt();
-    op = getCommand(uin);
-    handleOp(op, uin);
+    op = getOp(uin);
+    runOp(op, uin);
   }
 
   return 0;
