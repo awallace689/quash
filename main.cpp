@@ -4,6 +4,9 @@
 
 #include <string>
 #include <iostream>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 /**************************************************
  * Constants
@@ -18,18 +21,13 @@ std::string TITLE =
     "#    #  #    # #    # #    # #    #\n"
     "####  #  ####  #    #  ####  #    #\n";
 
-// Terminal prompt string. Can convert to function once PWD is defined.
-std::string PROMPT_PREFIX = "<put pwd here> $ ";
-
 // Used in runOp's switch to pass input string to its corresponding set of instructions.
 enum QuashOperation
 {
   Init = 0, // Couldn't figure out how else to initialize 'op' in the main loop.
   Error = 1,
   Exit = 2,
-
-  // Maybe define SpawnProcess if input starts with '/' or './', for example.
-  // The handler function for this could extract any parameters and pass them to execl.
+  ExecNoParam = 3, // ./idonthaveparemeters or /test/idonthaveparameters
 };
 
 /**************************************************
@@ -40,11 +38,24 @@ enum QuashOperation
  * Generic IO Functions
  **************************************************/
 
+// trim pwd to current directory and append to prompt prefix
+std::string getPromptPrefix()
+{
+  std::string pwd = getenv("PWD");
+  auto lastSlashIndex = pwd.find_last_of("/");
+  if (lastSlashIndex != 0)
+  {
+    pwd = pwd.substr(lastSlashIndex + 1, sizeof(pwd));
+  }
+
+  return ("UserProcess@Quash " + pwd + " $ ");
+}
+
 std::string prompt()
 {
   std::string user_in;
 
-  std::cout << PROMPT_PREFIX;
+  std::cout << getPromptPrefix();
   std::getline(std::cin, user_in);
 
   return user_in;
@@ -66,6 +77,34 @@ void echo(std::string s)
 bool isExitCommand(std::string in)
 {
   if (in == "exit" || in == "quit")
+  {
+    return true;
+  }
+
+  return false;
+}
+
+bool isExecNoParam(std::string in)
+{
+  int len = 0;
+  while (in[len] != '\0')
+  {
+    len += 1;
+  }
+
+  // valid program path has at least 2 characters and no spaces (unless it has parameters).
+  // ExecNoParam does not apply to commands with parameters.
+  if (len < 2 || in.find(' ') != std::string::npos)
+  {
+    return false;
+  }
+  // command is relative path './ ...'.
+  else if (in[0] == '.' && in[1] == '/')
+  {
+    return true;
+  }
+  // command uses absolute path '/ ...'.
+  else if (in[0] == '/')
   {
     return true;
   }
@@ -99,6 +138,43 @@ void handleError(std::string input)
   echo("quash: command not found: " + command + " \n");
 }
 
+// Handle 'ExecNoParam' op in runOp switch
+void handleExecNoParam(std::string input)
+{
+  int fd[2];
+  pipe(fd);
+  auto pid = fork();
+  
+  // if error
+  if (pid < 0) {
+    echo("Error creating process.\n");
+    return;
+  }
+
+  // if child
+  if (pid == 0) {
+    auto path = input;
+    auto executableName = input.substr(input.find_last_of('/') + 1, sizeof(input));
+    auto error = execlp(path.c_str(), executableName.c_str(), NULL);
+
+    if (error < 0) {
+      char write_buffer[1024] = "Error loading executable";
+      write(fd[1], &write_buffer, sizeof(write_buffer));
+    }
+
+    char write_buffer[1024] = "Child process exited successfully";
+    write(fd[1], &write_buffer, sizeof(write_buffer));
+
+    exit(0);
+  }
+  // if parent
+  else {
+    char read_buffer[1024];
+    read(fd[0], &read_buffer, sizeof(read_buffer));
+    echo(std::string(read_buffer));
+  }
+}
+
 /**************************************************
  * END Quash Process Operation Handling
  **************************************************/
@@ -115,7 +191,10 @@ QuashOperation getOp(std::string in)
   {
     return Exit;
   }
-  // else if (isSpawnProcess(in)) {...} or something else
+  else if (isExecNoParam(in))
+  {
+    return ExecNoParam;
+  }
 
   return Error;
 }
@@ -133,8 +212,9 @@ void runOp(QuashOperation op, std::string input)
     echo("Exiting...\n");
     break;
 
-    // case SpawnProcess: could handle spawning a new process with parameters
-    // extracted from string 'input'.
+  case ExecNoParam:
+    handleExecNoParam(input);
+    break;
   }
 }
 
