@@ -192,6 +192,10 @@ void runOp(QuashOperation op, std::string input)
 {
   switch (op)
   {
+  case Init:
+    echo("Something's broken in the run loop.\n");
+    break;
+    
   case Error:
     handleError(input);
     break;
