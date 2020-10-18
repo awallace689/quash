@@ -98,16 +98,12 @@ bool isExecNoParam(std::string in)
   {
     return false;
   }
-  // command is relative path './ ...'.
-  else if (in[0] == '.' && in[1] == '/')
+  // command is in form of './...', '/...', or 'command'
+  else
   {
     return true;
   }
-  // command uses absolute path '/ ...'.
-  else if (in[0] == '/')
-  {
-    return true;
-  }
+  
 
   return false;
 }
@@ -156,7 +152,7 @@ void handleExecNoParam(std::string input)
 
     if (error < 0)
     {
-      echo("quash: error loading file: '" + path + "'\n");
+      echo("quash: no such file or directory: '" + path + "'\n");
     }
 
     exit(0);
