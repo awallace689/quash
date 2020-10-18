@@ -48,7 +48,7 @@ std::string getPromptPrefix()
     pwd = pwd.substr(lastSlashIndex + 1, sizeof(pwd));
   }
 
-  return ("UserProcess@Quash " + pwd + " $ ");
+  return ("User@Quash " + pwd + " $ ");
 }
 
 std::string prompt()
@@ -141,8 +141,6 @@ void handleError(std::string input)
 // Handle 'ExecNoParam' op in runOp switch
 void handleExecNoParam(std::string input)
 {
-  int fd[2];
-  pipe(fd);
   auto pid = fork();
   
   // if error
@@ -150,28 +148,22 @@ void handleExecNoParam(std::string input)
     echo("Error creating process.\n");
     return;
   }
-
   // if child
   if (pid == 0) {
     auto path = input;
     auto executableName = input.substr(input.find_last_of('/') + 1, sizeof(input));
     auto error = execlp(path.c_str(), executableName.c_str(), NULL);
 
-    if (error < 0) {
-      char write_buffer[1024] = "Error loading executable";
-      write(fd[1], &write_buffer, sizeof(write_buffer));
+    if (error < 0)
+    {
+      echo("quash: error loading file: '" + path + "'\n");
     }
-
-    char write_buffer[1024] = "Child process exited successfully";
-    write(fd[1], &write_buffer, sizeof(write_buffer));
 
     exit(0);
   }
   // if parent
   else {
-    char read_buffer[1024];
-    read(fd[0], &read_buffer, sizeof(read_buffer));
-    echo(std::string(read_buffer));
+    waitpid(pid, NULL, 0);
   }
 }
 
@@ -218,7 +210,7 @@ void runOp(QuashOperation op, std::string input)
   }
 }
 
-int main()
+int main(int argc, char **argv, char **envp)
 {
   QuashOperation op = Init;
   echo(TITLE + "\n\n\n\n\n\n");
