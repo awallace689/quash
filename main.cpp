@@ -135,6 +135,9 @@ void handleError(std::string input)
 }
 
 // Handle 'ExecNoParam' op in runOp switch
+// TODO: change to 'execl' instead of 'execlp' and manually search $PATH after it is implemented.
+// bash/zsh built-in shell commands will not throw error but have no effect 
+// (try typing 'jobs' or 'cd', then 'asdf' to see the difference).
 void handleExecNoParam(std::string input)
 {
   auto pid = fork();
@@ -195,7 +198,7 @@ void runOp(QuashOperation op, std::string input)
   case Init:
     echo("Something's broken in the run loop.\n");
     break;
-    
+
   case Error:
     handleError(input);
     break;
