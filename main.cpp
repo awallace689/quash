@@ -9,7 +9,7 @@
 #include <unistd.h>
 
 /**************************************************
- * Constants
+ * Globals
  **************************************************/
 
 std::string TITLE =
@@ -28,15 +28,36 @@ enum QuashOperation
   Error = 1,
   Exit = 2,
   ExecNoParam = 3, // ./idonthaveparemeters or /test/idonthaveparameters
+  ExecWithParam = 4,
 };
 
+// I don't use this anywhere yet, but this copies the shell's PATH.
+std::string PATH = std::string(getenv("PATH"));
+
 /**************************************************
- * END Constants
+ * END Globals
  **************************************************/
 
 /**************************************************
- * Generic IO Functions
+ * Generic Helper Functions
  **************************************************/
+
+void splitString(std::string input, char **outArr, std::string delimiters)
+{
+  char *cstr_input = new char[input.length() + 1];
+  strcpy(cstr_input, input.c_str());
+
+  char *pos;
+  int index = 0;
+  pos = strtok(cstr_input, delimiters.c_str());
+  while (pos != NULL)
+  {
+    outArr[index] = pos;
+    pos = strtok(NULL, delimiters.c_str());
+    index++;
+  }
+  outArr[index] = NULL;
+}
 
 // trim pwd to current directory and append to prompt prefix
 std::string getPromptPrefix()
@@ -45,7 +66,7 @@ std::string getPromptPrefix()
   auto lastSlashIndex = pwd.find_last_of("/");
   if (lastSlashIndex != 0)
   {
-    pwd = pwd.substr(lastSlashIndex + 1, sizeof(pwd));
+    pwd = pwd.substr(lastSlashIndex + 1, pwd.length());
   }
 
   return ("User@Quash " + pwd + " $ ");
@@ -67,7 +88,7 @@ void echo(std::string s)
 }
 
 /**************************************************
- * END Generic IO Functions
+ * END Generic Helper Functions
  **************************************************/
 
 /**************************************************
@@ -92,20 +113,32 @@ bool isExecNoParam(std::string in)
     len += 1;
   }
 
-  // valid program path has at least 2 characters and no spaces (unless it has parameters).
+  // valid program path w/ no parameters has no spaces.
   // ExecNoParam does not apply to commands with parameters.
-  if (len < 2 || in.find(' ') != std::string::npos)
+  if (len < 1 || in.find(' ') != std::string::npos)
   {
     return false;
   }
-  // command is in form of './...', '/...', or 'command'
-  else
-  {
-    return true;
-  }
-  
 
-  return false;
+  // command is in form of './...', '/...', or 'command'
+  return true;
+}
+
+bool isExecWithParam(std::string in)
+{
+  int len = 0;
+  while (in[len] != '\0')
+  {
+    len += 1;
+  }
+
+  if (len < 1 || in.find(' ') == std::string::npos)
+  {
+    return false;
+  }
+
+  // command is in form of './... ...', '/... ...' or 'command ...'
+  return true;
 }
 
 /**************************************************
@@ -134,23 +167,26 @@ void handleError(std::string input)
   echo("quash: command not found: " + command + " \n");
 }
 
-// Handle 'ExecNoParam' op in runOp switch
-// TODO: change to 'execl' instead of 'execlp' and manually search $PATH after it is implemented.
-// bash/zsh built-in shell commands will not throw error but have no effect 
+// TODO: change to 'execl' instead of 'execlp' and manually search PATH after it is implemented.
+// bash/zsh built-in shell commands will not throw error but have no effect. exec_p will not fail
+// for these builtin commands but they occur in child process, which exits).
 // (try typing 'jobs' or 'cd', then 'asdf' to see the difference).
 void handleExecNoParam(std::string input)
 {
   auto pid = fork();
-  
+
   // if error
-  if (pid < 0) {
+  if (pid < 0)
+  {
     echo("Error creating process.\n");
     return;
   }
+
   // if child
-  if (pid == 0) {
+  if (pid == 0)
+  {
     auto path = input;
-    auto executableName = input.substr(input.find_last_of('/') + 1, sizeof(input));
+    auto executableName = input.substr(input.find_last_of('/') + 1, input.length());
     auto error = execlp(path.c_str(), executableName.c_str(), NULL);
 
     if (error < 0)
@@ -161,7 +197,44 @@ void handleExecNoParam(std::string input)
     exit(0);
   }
   // if parent
-  else {
+  else
+  {
+    waitpid(pid, NULL, 0);
+  }
+}
+
+// TODO: change to 'execv' instead of 'execvp' and manually search PATH after it is implemented.
+// bash/zsh built-in shell commands will not throw error but have no effect. exec_p will not fail
+// for these builtin commands but they occur in child process, which exits).
+// (try typing 'cd ..' then 'asdf -a' to see the difference).
+void handleExecWithParam(std::string input)
+{
+  auto pid = fork();
+
+  if (pid < 0)
+  {
+    echo("Error creating process.\n");
+    return;
+  }
+
+  if (pid == 0)
+  {
+    char *args[100];
+    splitString(input, args, " ");
+
+    auto path = input.substr(0, input.find_first_of(' '));
+    auto executableName = path.substr(input.find_last_of('/') + 1, input.length());
+    auto error = execvp(path.c_str(), args);
+
+    if (error < 0)
+    {
+      echo("quash: no such file or directory: '" + path + "'\n");
+    }
+
+    exit(0);
+  }
+  else
+  {
     waitpid(pid, NULL, 0);
   }
 }
@@ -181,6 +254,10 @@ QuashOperation getOp(std::string in)
   if (isExitCommand(in))
   {
     return Exit;
+  }
+  else if (isExecWithParam(in))
+  {
+    return ExecWithParam;
   }
   else if (isExecNoParam(in))
   {
@@ -205,6 +282,10 @@ void runOp(QuashOperation op, std::string input)
 
   case Exit:
     echo("Exiting...\n");
+    break;
+
+  case ExecWithParam:
+    handleExecWithParam(input);
     break;
 
   case ExecNoParam:
