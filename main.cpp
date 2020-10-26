@@ -7,10 +7,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <regex>
 
 /**************************************************
  * Globals
  **************************************************/
+
+// ref char* used in splitString, function loses scope from exec call
+char *deleteMe;
 
 std::string TITLE =
     "\n #####\n"
@@ -29,10 +33,9 @@ enum QuashOperation
   Exit = 2,
   ExecNoParam = 3, // ./idonthaveparemeters or /test/idonthaveparameters
   ExecWithParam = 4,
+  SetPath = 5,
+  SetHome = 6,
 };
-
-// I don't use this anywhere yet, but this copies the shell's PATH.
-std::string PATH = std::string(getenv("PATH"));
 
 /**************************************************
  * END Globals
@@ -42,7 +45,7 @@ std::string PATH = std::string(getenv("PATH"));
  * Generic Helper Functions
  **************************************************/
 
-void splitString(std::string input, char **outArr, std::string delimiters)
+char *splitString(std::string input, char **outArr, std::string delimiters)
 {
   char *cstr_input = new char[input.length() + 1];
   strcpy(cstr_input, input.c_str());
@@ -57,6 +60,8 @@ void splitString(std::string input, char **outArr, std::string delimiters)
     index++;
   }
   outArr[index] = NULL;
+
+  return cstr_input;
 }
 
 // trim pwd to current directory and append to prompt prefix
@@ -94,6 +99,26 @@ void echo(std::string s)
 /**************************************************
  * Quash Process Input Parsing
  **************************************************/
+
+bool isSetHome(std::string in)
+{
+  if (std::regex_match(in, std::regex("set HOME=\".*\"")))
+  {
+    return true;
+  }
+
+  return false;
+}
+
+bool isSetPath(std::string in)
+{
+  if (std::regex_match(in, std::regex("set PATH=\".*\"")))
+  {
+    return true;
+  }
+
+  return false;
+}
 
 bool isExitCommand(std::string in)
 {
@@ -149,6 +174,28 @@ bool isExecWithParam(std::string in)
  * Quash Process Operation Handling
  **************************************************/
 
+void handleSetHome(std::string input)
+{
+  auto firstQuoteAndRest = input.substr(input.find_first_of('\"') + 1, std::string::npos);
+  auto newHome = firstQuoteAndRest.substr(0, firstQuoteAndRest.find_first_of('\"'));
+
+  if (!(setenv("HOME", newHome.c_str(), 1) == 0))
+  {
+    echo("quash: set: Error setting path.\n");
+  }
+}
+
+void handleSetPath(std::string input)
+{
+  auto firstQuoteAndRest = input.substr(input.find_first_of('\"') + 1, std::string::npos);
+  auto newPath = firstQuoteAndRest.substr(0, firstQuoteAndRest.find_first_of('\"'));
+
+  if (!(setenv("PATH", newPath.c_str(), 1) == 0))
+  {
+    echo("quash: set: Error setting path.\n");
+  }
+}
+
 // Handle 'Error' op in runOp switch
 void handleError(std::string input)
 {
@@ -167,10 +214,6 @@ void handleError(std::string input)
   echo("quash: command not found: " + command + " \n");
 }
 
-// TODO: change to 'execl' instead of 'execlp' and manually search PATH after it is implemented.
-// bash/zsh built-in shell commands will not throw error but have no effect. exec_p will not fail
-// for these builtin commands but they occur in child process, which exits).
-// (try typing 'jobs' or 'cd', then 'asdf' to see the difference).
 void handleExecNoParam(std::string input)
 {
   auto pid = fork();
@@ -185,9 +228,11 @@ void handleExecNoParam(std::string input)
   // if child
   if (pid == 0)
   {
+    int error = 0;
+
     auto path = input;
     auto executableName = input.substr(input.find_last_of('/') + 1, input.length());
-    auto error = execlp(path.c_str(), executableName.c_str(), NULL);
+    error = execlp(path.c_str(), executableName.c_str(), NULL);
 
     if (error < 0)
     {
@@ -203,10 +248,6 @@ void handleExecNoParam(std::string input)
   }
 }
 
-// TODO: change to 'execv' instead of 'execvp' and manually search PATH after it is implemented.
-// bash/zsh built-in shell commands will not throw error but have no effect. exec_p will not fail
-// for these builtin commands but they occur in child process, which exits).
-// (try typing 'cd ..' then 'asdf -a' to see the difference).
 void handleExecWithParam(std::string input)
 {
   auto pid = fork();
@@ -220,7 +261,7 @@ void handleExecWithParam(std::string input)
   if (pid == 0)
   {
     char *args[100];
-    splitString(input, args, " ");
+    deleteMe = splitString(input, args, " ");
 
     auto path = input.substr(0, input.find_first_of(' '));
     auto executableName = path.substr(input.find_last_of('/') + 1, input.length());
@@ -237,6 +278,8 @@ void handleExecWithParam(std::string input)
   {
     waitpid(pid, NULL, 0);
   }
+
+  delete[] deleteMe;
 }
 
 /**************************************************
@@ -251,7 +294,15 @@ void handleExecWithParam(std::string input)
 // the string corresponds with.
 QuashOperation getOp(std::string in)
 {
-  if (isExitCommand(in))
+  if (isSetPath(in))
+  {
+    return SetPath;
+  }
+  else if (isSetHome(in))
+  {
+    return SetHome;
+  }
+  else if (isExitCommand(in))
   {
     return Exit;
   }
@@ -290,6 +341,14 @@ void runOp(QuashOperation op, std::string input)
 
   case ExecNoParam:
     handleExecNoParam(input);
+    break;
+
+  case SetPath:
+    handleSetPath(input);
+    break;
+
+  case SetHome:
+    echo("changed home\n");
     break;
   }
 }
