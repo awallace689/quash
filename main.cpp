@@ -35,6 +35,7 @@ enum QuashOperation
   ExecWithParam = 4,
   SetPath = 5,
   SetHome = 6,
+  Cd = 7,
 };
 
 /**************************************************
@@ -67,7 +68,8 @@ char *splitString(std::string input, char **outArr, std::string delimiters)
 // trim pwd to current directory and append to prompt prefix
 std::string getPromptPrefix()
 {
-  std::string pwd = getenv("PWD");
+  char c_str[PATH_MAX];
+  std::string pwd = getcwd(c_str, sizeof(c_str));
   auto lastSlashIndex = pwd.find_last_of("/");
   if (lastSlashIndex != 0)
   {
@@ -99,6 +101,16 @@ void echo(std::string s)
 /**************************************************
  * Quash Process Input Parsing
  **************************************************/
+
+bool isChangeDir(std::string in)
+{
+  if (std::regex_match(in, std::regex("cd .*")) || in == "cd")
+  {
+    return true;
+  }
+
+  return false;
+}
 
 bool isSetHome(std::string in)
 {
@@ -174,6 +186,31 @@ bool isExecWithParam(std::string in)
  * Quash Process Operation Handling
  **************************************************/
 
+void handleChangeDir(std::string input)
+{
+  int success;
+
+  if (input == "cd")
+  {
+    auto home = getenv("HOME");
+    success = chdir(home);
+    if (success == -1)
+    {
+      echo("cd: no such file or directory: " + std::string(home) + '\n');
+    }
+  }
+  else
+  {
+    auto firstQuoteAndRest = input.substr(input.find_first_of(' ') + 1, std::string::npos);
+    auto newDir = firstQuoteAndRest.substr(0, firstQuoteAndRest.find_first_of(' '));
+    success = chdir(newDir.c_str());
+    if (success == -1)
+    {
+      echo("cd: no such file or directory: " + newDir + '\n');
+    }
+  }
+}
+
 void handleSetHome(std::string input)
 {
   auto firstQuoteAndRest = input.substr(input.find_first_of('\"') + 1, std::string::npos);
@@ -181,7 +218,7 @@ void handleSetHome(std::string input)
 
   if (!(setenv("HOME", newHome.c_str(), 1) == 0))
   {
-    echo("quash: set: Error setting path.\n");
+    echo("quash: set: Error setting home.\n");
   }
 }
 
@@ -302,6 +339,10 @@ QuashOperation getOp(std::string in)
   {
     return SetHome;
   }
+  else if (isChangeDir(in))
+  {
+    return Cd;
+  }
   else if (isExitCommand(in))
   {
     return Exit;
@@ -348,7 +389,11 @@ void runOp(QuashOperation op, std::string input)
     break;
 
   case SetHome:
-    echo("changed home\n");
+    handleSetHome(input);
+    break;
+
+  case Cd:
+    handleChangeDir(input);
     break;
   }
 }
@@ -357,6 +402,7 @@ int main(int argc, char **argv, char **envp)
 {
   QuashOperation op = Init;
   echo(TITLE + "\n\n\n\n\n\n");
+  echo(getenv("HOME"));
 
   // The run loop. Get input, determine what operation was specified, run (handle) the operation.
   while (op != Exit)
