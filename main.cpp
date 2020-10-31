@@ -321,6 +321,28 @@ void handleExecWithParam(std::string input)
   delete[] deleteMe;
 }
 
+//PIPE HANDLING
+bool isPiped(string input)
+{
+  size_t found = input.find("|");
+  if(found != string::npos)
+  {
+    return true;
+  }
+  return false;
+}
+string pipeFirstCommand(string input)
+{
+  auto firstCommand = input.substr(0, input.find_first_of("|") -1);
+  return firstCommand;
+}
+string pipeSecondCommand(string input)
+{
+  auto secondCommand = input.substr(input.find_first_of("|")+2,input.length());
+  return secondCommand;
+}
+
+
 /**************************************************
  * END Quash Process Operation Handling
  **************************************************/
@@ -360,82 +382,40 @@ QuashOperation getOp(std::string in)
 
   return Error;
 }
-
-string getOutfile(string input)
-{
-  size_t found = input.find("> ");
-  size_t found1 = input.find(">");
-  if(found != string::npos)
-  {
-     auto filename = input.substr(input.find_first_of('>')+2, input.find_last_of('.')+4);
-     return filename;
-  }
-  else if(found1 != string::npos)
-  {
-    auto filename = input.substr(input.find_first_of('>')+1, input.find_last_of('.')+4);
-    return filename;
-  }
-  else
-  {
-    return "-1";
-  }
-}
-
-bool isPiped(string input)
-{
-  size_t found = input.find("|");
-  if(found != string::npos)
-  {
-     return true;
-  }
-  return false;
-}
-
-string pipeFirstCommand(string input)
-{
-  auto firstCommand = input.substr(0, input.find_first_of("|") -1);
-  return firstCommand;
-}
-string pipeSecondCommand(string input)
-{
-  auto secondCommand = input.substr(input.find_first_of("|")+2,input.length());
-  return secondCommand;
-}
-
 // Execute some sequence of code depending on what the operation is.
 void runOp(QuashOperation op, std::string input)
 {
   switch (op)
   {
-  case Init:
+    case Init:
     echo("Something's broken in the run loop.\n");
     break;
 
-  case Error:
+    case Error:
     handleError(input);
     break;
 
-  case Exit:
+    case Exit:
     echo("Exiting...\n");
     break;
 
-  case ExecWithParam:
+    case ExecWithParam:
     handleExecWithParam(input);
     break;
 
-  case ExecNoParam:
+    case ExecNoParam:
     handleExecNoParam(input);
     break;
 
-  case SetPath:
+    case SetPath:
     handleSetPath(input);
     break;
 
-  case SetHome:
+    case SetHome:
     handleSetHome(input);
     break;
 
-  case Cd:
+    case Cd:
     handleChangeDir(input);
     break;
   }
@@ -476,12 +456,39 @@ void handlePiped(string uin)
   waitpid(pid_1,NULL,0);
   waitpid(pid_2,NULL,0);
 }
+string getOutfile(string input)
+{
+  size_t found = input.find("> ");
+  size_t found1 = input.find(">");
+  if(found != string::npos)
+  {
+     auto filename = input.substr(input.find_first_of('>')+2, input.find_last_of('.')+4);
+     return filename;
+  }
+  else if(found1 != string::npos)
+  {
+    auto filename = input.substr(input.find_first_of('>')+1, input.find_last_of('.')+4);
+    return filename;
+  }
+  else
+  {
+    return "-1";
+  }
+}
+
+string commandToOutfile(string input)
+{
+     auto command = input.substr(0, input.find_first_of(">") -1 );
+     return command;
+}
+
 
 int main(int argc, char **argv, char **envp)
 {
   QuashOperation op = Init;
   echo(TITLE + "\n\n\n\n\n\n");
   echo(getenv("HOME"));
+  //PRESERVE initial file i/o location
   int saved_stdout = dup(STDOUT_FILENO);
   int saved_stdin = dup(STDIN_FILENO);
   // The run loop. Get input, determine what operation was specified, run (handle) the operation.
@@ -501,14 +508,15 @@ int main(int argc, char **argv, char **envp)
     else if(getOutfile(uin) != "-1")
     {
       {
+        fflush(stdout);
         freopen(getOutfile(uin).c_str(),"w",stdout);
-        op = getOp(uin);
-        runOp(op, uin);
+        op = getOp(commandToOutfile(uin));
+        runOp(op, commandToOutfile(uin));
         fflush(stdout);
         dup2(saved_stdout, STDOUT_FILENO);
       }
     }
-    
+
     else{
       op = getOp(uin);
       runOp(op, uin);
