@@ -8,12 +8,14 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <regex>
-
+#include<linux/limits.h> //Used because my compiler was failing to find library for PATH_MAX
+#include <sys/wait.h> //Compiler wasnt se
+using namespace std;
 /**************************************************
  * Globals
  **************************************************/
 
-// ref char* used in splitString, function loses scope from exec call
+// ref char* used in splitString, function loses scope from exec callv
 char *deleteMe;
 
 std::string TITLE =
@@ -83,7 +85,7 @@ std::string prompt()
 {
   std::string user_in;
 
-  std::cout << getPromptPrefix();
+  cout<<getPromptPrefix();
   std::getline(std::cin, user_in);
 
   return user_in;
@@ -91,7 +93,7 @@ std::string prompt()
 
 void echo(std::string s)
 {
-  std::cout << s;
+  cout<<s;
 }
 
 /**************************************************
@@ -359,6 +361,47 @@ QuashOperation getOp(std::string in)
   return Error;
 }
 
+string getOutfile(string input)
+{
+  size_t found = input.find("> ");
+  size_t found1 = input.find(">");
+  if(found != string::npos)
+  {
+     auto filename = input.substr(input.find_first_of('>')+2, input.find_last_of('.')+4);
+     return filename;
+  }
+  else if(found1 != string::npos)
+  {
+    auto filename = input.substr(input.find_first_of('>')+1, input.find_last_of('.')+4);
+    return filename;
+  }
+  else
+  {
+    return "-1";
+  }
+}
+
+bool isPiped(string input)
+{
+  size_t found = input.find("|");
+  if(found != string::npos)
+  {
+     return true;
+  }
+  return false;
+}
+
+string pipeFirstCommand(string input)
+{
+  auto firstCommand = input.substr(0, input.find_first_of("|") -1);
+  return firstCommand;
+}
+string pipeSecondCommand(string input)
+{
+  auto secondCommand = input.substr(input.find_first_of("|")+2,input.length());
+  return secondCommand;
+}
+
 // Execute some sequence of code depending on what the operation is.
 void runOp(QuashOperation op, std::string input)
 {
@@ -398,18 +441,78 @@ void runOp(QuashOperation op, std::string input)
   }
 }
 
+void handlePiped(string uin)
+{
+  QuashOperation op;
+  pid_t pid_1, pid_2;
+
+  int p1[2];
+  pipe(p1);
+
+  pid_1 = fork();
+  if(pid_1 == 0){
+    //do first operation and write to write end of pipe
+    //get first op
+    op = getOp(pipeFirstCommand(uin));
+    dup2(p1[1], STDOUT_FILENO);
+    close(p1[0]);
+    runOp(op, pipeFirstCommand(uin));
+    exit(0);
+  }
+
+  pid_2 = fork();
+  if(pid_2 == 0){
+    //get second op
+    op = getOp(pipeSecondCommand(uin));
+    //do second operation with stdin from read end of pipe
+    dup2(p1[0], STDIN_FILENO);
+    close(p1[1]);
+    runOp(op, pipeSecondCommand(uin));
+    exit(0);
+  }
+
+  close(p1[0]);
+  close(p1[1]);
+  waitpid(pid_1,NULL,0);
+  waitpid(pid_2,NULL,0);
+}
+
 int main(int argc, char **argv, char **envp)
 {
   QuashOperation op = Init;
   echo(TITLE + "\n\n\n\n\n\n");
   echo(getenv("HOME"));
-
+  int saved_stdout = dup(STDOUT_FILENO);
+  int saved_stdin = dup(STDIN_FILENO);
   // The run loop. Get input, determine what operation was specified, run (handle) the operation.
   while (op != Exit)
   {
+    //Assigns the user input to a string
     std::string uin = prompt();
-    op = getOp(uin);
-    runOp(op, uin);
+
+    //If users input contains a | this if statement handles it
+    if(isPiped(uin)){
+      handlePiped(uin);
+      dup2(saved_stdout, STDOUT_FILENO);
+      dup2(saved_stdin,STDIN_FILENO);
+    }
+
+    //Checks if the user has designated an output file, sets STDOUT to that file, runs op, then resets STDOUT_FILENO
+    else if(getOutfile(uin) != "-1")
+    {
+      {
+        freopen(getOutfile(uin).c_str(),"w",stdout);
+        op = getOp(uin);
+        runOp(op, uin);
+        fflush(stdout);
+        dup2(saved_stdout, STDOUT_FILENO);
+      }
+    }
+    
+    else{
+      op = getOp(uin);
+      runOp(op, uin);
+    }
   }
 
   return 0;
