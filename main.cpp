@@ -456,24 +456,26 @@ void handlePiped(string uin)
   waitpid(pid_1,NULL,0);
   waitpid(pid_2,NULL,0);
 }
+
+bool isOutfileSet(string input)
+{
+  size_t found = input.find(">");
+  if(found != string::npos)
+  {
+     return true;
+  }
+  return false;
+}
+
 string getOutfile(string input)
 {
-  size_t found = input.find("> ");
-  size_t found1 = input.find(">");
+  size_t found = input.find(">");
   if(found != string::npos)
   {
      auto filename = input.substr(input.find_first_of('>')+2, input.find_last_of('.')+4);
      return filename;
   }
-  else if(found1 != string::npos)
-  {
-    auto filename = input.substr(input.find_first_of('>')+1, input.find_last_of('.')+4);
-    return filename;
-  }
-  else
-  {
-    return "-1";
-  }
+  return "-1";
 }
 
 string commandToOutfile(string input)
@@ -497,30 +499,24 @@ int main(int argc, char **argv, char **envp)
     //Assigns the user input to a string
     std::string uin = prompt();
 
+    // If user input has a >, changes STDOUT to designated output file and reassigns uin to just the command
+    if(isOutfileSet(uin)){
+        fflush(stdout);
+        freopen(getOutfile(uin).c_str(), "w",stdout);
+        uin = commandToOutfile(uin);
+    }
+
     //If users input contains a | this if statement handles it
     if(isPiped(uin)){
       handlePiped(uin);
-      dup2(saved_stdout, STDOUT_FILENO);
-      dup2(saved_stdin,STDIN_FILENO);
     }
 
-    //Checks if the user has designated an output file, sets STDOUT to that file, runs op, then resets STDOUT_FILENO
-    else if(getOutfile(uin) != "-1")
-    {
-      {
-        fflush(stdout);
-        freopen(getOutfile(uin).c_str(),"w",stdout);
-        op = getOp(commandToOutfile(uin));
-        runOp(op, commandToOutfile(uin));
-        fflush(stdout);
-        dup2(saved_stdout, STDOUT_FILENO);
-      }
-    }
+    op = getOp(uin);
+    runOp(op, uin);
 
-    else{
-      op = getOp(uin);
-      runOp(op, uin);
-    }
+    fflush(stdout);
+    dup2(saved_stdout, STDOUT_FILENO);
+    dup2(saved_stdin,STDIN_FILENO);
   }
 
   return 0;
