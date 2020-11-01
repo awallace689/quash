@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <regex>
+#include <vector>
 #include<linux/limits.h> //Used because my compiler was failing to find library for PATH_MAX
 #include <sys/wait.h> //Compiler wasnt se
 using namespace std;
@@ -17,7 +18,11 @@ using namespace std;
 
 // ref char* used in splitString, function loses scope from exec callv
 char *deleteMe;
-
+int jobid =0;
+int saved_stdout;
+int saved_stdin;
+string backgroundcommand;
+string jobStrings[100];
 std::string TITLE =
     "\n #####\n"
     "#     # #    #   ##    ####  #    #\n"
@@ -38,6 +43,7 @@ enum QuashOperation
   SetPath = 5,
   SetHome = 6,
   Cd = 7,
+  Jobs = 8,
 };
 
 /**************************************************
@@ -143,7 +149,14 @@ bool isExitCommand(std::string in)
 
   return false;
 }
-
+bool isJobs(std::string in)
+{
+  if(in == "jobs")
+  {
+    return true;
+  }
+  return false;
+}
 bool isExecNoParam(std::string in)
 {
   int len = 0;
@@ -321,6 +334,13 @@ void handleExecWithParam(std::string input)
   delete[] deleteMe;
 }
 
+void handleJobs(string input)
+{
+  for(int i=0; i<99; i++)
+  {
+    cout<<jobStrings[i];
+  }
+}
 //PIPE HANDLING
 bool isPiped(string input)
 {
@@ -358,6 +378,10 @@ QuashOperation getOp(std::string in)
   if (isSetPath(in))
   {
     return SetPath;
+  }
+  else if (isJobs(in))
+  {
+    return Jobs;
   }
   else if (isSetHome(in))
   {
@@ -417,6 +441,10 @@ void runOp(QuashOperation op, std::string input)
 
     case Cd:
     handleChangeDir(input);
+    break;
+
+    case Jobs:
+    handleJobs(input);
     break;
   }
 }
@@ -484,6 +512,33 @@ string commandToOutfile(string input)
      return command;
 }
 
+bool isBackgroundProc(string input)
+{
+  size_t found = input.find("&");
+  if(found != string::npos)
+  {
+    return true;
+  }
+  return false;
+}
+
+string getBackgroundCommand(string input)
+{
+     auto commandToRunInBackground = input.substr(0, input.find_last_of("&") -1);
+     return commandToRunInBackground;
+}
+
+void handler(int sig)
+{
+  //printf("process id: %d exited. \n", getpid());
+  fflush(stdout);
+  dup2(saved_stdout, STDOUT_FILENO);
+  dup2(saved_stdin,STDIN_FILENO);
+  cout<<"["<<jobid<<"]"<<" "<<getpid()<<" finished "<<backgroundcommand<<endl;
+  jobStrings[jobid] = "";
+  jobid--;
+}
+
 
 int main(int argc, char **argv, char **envp)
 {
@@ -491,13 +546,50 @@ int main(int argc, char **argv, char **envp)
   echo(TITLE + "\n\n\n\n\n\n");
   echo(getenv("HOME"));
   //PRESERVE initial file i/o location
-  int saved_stdout = dup(STDOUT_FILENO);
-  int saved_stdin = dup(STDIN_FILENO);
+   saved_stdout = dup(STDOUT_FILENO);
+   saved_stdin = dup(STDIN_FILENO);
+
+  // signal(SIGCHLD, handler);
   // The run loop. Get input, determine what operation was specified, run (handle) the operation.
   while (op != Exit)
   {
+
     //Assigns the user input to a string
     std::string uin = prompt();
+
+    //Checks if the user has designated command as background Process
+    //If it has the signal handler for sigchild is changed and the stdout for the child is changed
+    if(isBackgroundProc(uin))
+    {
+      jobid++;
+      uin = getBackgroundCommand(uin);
+      backgroundcommand = uin;
+      pid_t pid_1;
+      int status;
+      pid_1 = fork();
+      if(pid_1 == 0)
+      {
+        signal(SIGCHLD, handler);
+        cout<<"["<<jobid<<"]"<<" "<<getpid()<<" running in background"<<endl;
+    //    Used to delay child process for testing
+        for (long int i=10000000000; i>0; i--){
+        }
+      }
+      else if (pid_1 < 0)
+      {
+        cout<<"ERROR background process fork"<<endl;
+      }
+      else
+      {
+        char date[100];
+        sprintf(date, "[%d] %d %s\n", jobid, pid_1, uin.c_str());
+        jobStrings[jobid] = date;
+      }
+    }
+    else
+    {
+      signal(SIGCHLD,SIG_IGN);
+    }
 
     // If user input has a >, changes STDOUT to designated output file and reassigns uin to just the command
     if(isOutfileSet(uin)){
