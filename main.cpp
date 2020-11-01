@@ -528,17 +528,10 @@ string getBackgroundCommand(string input)
      return commandToRunInBackground;
 }
 
-void handler(int sig)
+void signalHandler(int sig)
 {
-  //printf("process id: %d exited. \n", getpid());
-  fflush(stdout);
-  dup2(saved_stdout, STDOUT_FILENO);
-  dup2(saved_stdin,STDIN_FILENO);
-  cout<<"["<<jobid<<"]"<<" "<<getpid()<<" finished "<<backgroundcommand<<endl;
-  jobStrings[jobid] = "";
-  jobid--;
+  //decrement the current job count
 }
-
 
 int main(int argc, char **argv, char **envp)
 {
@@ -561,34 +554,17 @@ int main(int argc, char **argv, char **envp)
     //If it has the signal handler for sigchild is changed and the stdout for the child is changed
     if(isBackgroundProc(uin))
     {
-      jobid++;
-      uin = getBackgroundCommand(uin);
-      backgroundcommand = uin;
-      pid_t pid_1;
-      int status;
-      pid_1 = fork();
-      if(pid_1 == 0)
+      //increment the count of the current jobs
+      int jobid++;
+      //Assign signal to signal handler prior to forking
+      signal(SIGCHLD,signalHandler);
+      pid_t pid = fork();
+      if(pid == 0)
       {
-        signal(SIGCHLD, handler);
-        cout<<"["<<jobid<<"]"<<" "<<getpid()<<" running in background"<<endl;
-    //    Used to delay child process for testing
-        for (long int i=10000000000; i>0; i--){
-        }
+        //just for testing to simulate a process still running
+        sleep(10);
       }
-      else if (pid_1 < 0)
-      {
-        cout<<"ERROR background process fork"<<endl;
-      }
-      else
-      {
-        char date[100];
-        sprintf(date, "[%d] %d %s\n", jobid, pid_1, uin.c_str());
-        jobStrings[jobid] = date;
-      }
-    }
-    else
-    {
-      signal(SIGCHLD,SIG_IGN);
+
     }
 
     // If user input has a >, changes STDOUT to designated output file and reassigns uin to just the command
