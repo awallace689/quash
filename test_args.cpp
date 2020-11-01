@@ -3,33 +3,14 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <unistd.h>
-
-void signalHandler(int signal)
-{
-	printf("Cought signal %d!\n",signal);
-	if (signal==SIGCHLD) {
-		printf("Child ended\n");
-		wait(NULL);
-	}
-}
-
+#include <string>
+#include <iostream>
+using namespace std;
 int main()
 {
-	signal(SIGALRM,signalHandler);
-	signal(SIGUSR1,signalHandler);
-	signal(SIGCHLD,signalHandler);
-
-	if (!fork()) {
-		printf("Child running...\n");
-		sleep(2);
-		printf("Child sending SIGALRM...\n");
-		kill(getppid(),SIGALRM); /*send alarm signal to parent*/
-		sleep(5);
-		printf("Child exitting...\n");
-		return 0;
-	}
-	printf("Parent running, PID=%d. Press ENTER to exit.\n",getpid());
-	getchar();
-	printf("Parent exitting...\n");
-	return 0;
+  struct jobStruct {int a; char* b;};
+  int pid = 5;
+  struct jobStruct to_string(pid)  = {1,"asdf"};
+  cout<<to_string(pid).a;
+  return 0;
 }

@@ -558,11 +558,22 @@ int main(int argc, char **argv, char **envp)
       int jobid++;
       //Assign signal to signal handler prior to forking
       signal(SIGCHLD,signalHandler);
+      //fork and assign process id to pid
       pid_t pid = fork();
+      //in the child
       if(pid == 0)
       {
         //just for testing to simulate a process still running
         sleep(10);
+      }
+      //in case of Error
+      if(pid<0){break;}
+      //in the parent
+      else
+      {
+        //Print that the process has started
+        printf("[%d] %d running in background",jobid,pid);
+
       }
 
     }
