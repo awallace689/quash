@@ -1,0 +1,31 @@
+The child process created using fork() typically inherits the environment of the parent process.
+In your quash program, when a new environment variable is created using the "set" command, the new variable should be made visible to the child process.
+
+For example, in the Linux bash shell we get the following:
+$ unset MYVAR
+$ MYVAR=NEW_ENV_VAR
+$ echo $MYVAR
+NEW_ENV_VAR
+$ ./file7
+MYVAR: (null)
+
+Although "MYVAR" is set in the current process, it is not transmitted by the shell to the child process "file7".
+
+In bash, you need to use "export" to actually update the environment variable that is sent to the child
+$ unset MYVAR
+$ MYVAR=NEW_ENV_VAR
+$ echo $MYVAR
+NEW_ENV_VAR
+$ export MYVAR
+$ ./file7
+MYVAR: NEW_ENV_VAR
+
+
+In your quash implementation, the "set" command should achieve the same effect as "export" in bash.
+You should not use putenv() to do this, because that would be using the capabilities of the current shell (bash) to implement you quash shell.
+Your shell should be able to function independently of bash.
+So, explore the use of execle() or execvpe() that allows to pass an updated environment to the child process.
+Also, use the following instance of main in your quash shell to get the initial environment:
+int main (int argc, char **argv, char **envp)
+
+You may use putend() as a last resort, but that should be included as a shortcoming in your report.
