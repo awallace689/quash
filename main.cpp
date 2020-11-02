@@ -28,6 +28,7 @@ struct jobStruct{
   int processId;
   string commandRan;
 };
+string previousCommand;
 vector<jobStruct> jobsVector;
 std::string TITLE =
     "\n #####\n"
@@ -351,6 +352,7 @@ void handleJobs(string input)
     }
 
 }
+
 //PIPE HANDLING
 bool isPiped(string input)
 {
@@ -372,7 +374,98 @@ string pipeSecondCommand(string input)
   return secondCommand;
 }
 
+bool isSecondPipe(string input)
+{
+  size_t found = input.find("|");
+  size_t found2 = input.find("|");
+  if(found != string::npos)
+  {
+    if(found2 != string::npos)
+    {
+      return true;
+    }
+    return false;
+  }
+  return false;
+}
 
+string doublePipeSecondCommand(string input)
+{
+  auto secondCommand = input.substr(input.find_first_of("|")+2,input.find_last_of("|"));
+  cout<<"2:"<<secondCommand<<endl;
+  return secondCommand;
+}
+
+string doublePipeThirdCommand(string input)
+{
+  auto thirdCommand = input.substr(input.find_last_of("|")+2,input.length());
+  cout<<"3:"<<thirdCommand<<endl;
+  return thirdCommand;
+}
+
+//IO helper functions
+bool isInfileSet(string input)
+{
+  size_t found = input.find("<");
+  if(found != string::npos)
+  {
+    return true;
+  }
+  return false;
+}
+
+string getInfile(string input)
+{
+  auto filename = input.substr(input.find_first_of('<')+2, input.find_last_of('.')+4);
+  return filename;
+}
+
+string commandReadingFromFile(string input)
+{
+  auto command = input.substr(0, input.find_first_of("<") -1 );
+  return command;
+}
+
+bool isOutfileSet(string input)
+{
+  size_t found = input.find(">");
+  if(found != string::npos)
+  {
+    return true;
+  }
+  return false;
+}
+
+string getOutfile(string input)
+{
+  auto filename = input.substr(input.find_first_of('>')+2, input.find_last_of('.')+4);
+  return filename;
+}
+
+string commandToOutfile(string input)
+{
+  auto command = input.substr(0, input.find_first_of(">") -1 );
+  return command;
+}
+///////////////////////////////////////////////
+
+// & background process helper functions
+bool isBackgroundProc(string input)
+{
+  size_t found = input.find("&");
+  if(found != string::npos)
+  {
+    return true;
+  }
+  return false;
+}
+
+string getBackgroundCommand(string input)
+{
+  auto commandToRunInBackground = input.substr(0, input.find_last_of("&") -1);
+  return commandToRunInBackground;
+}
+//////////////////////////////////////////////
 /**************************************************
  * END Quash Process Operation Handling
  **************************************************/
@@ -495,47 +588,59 @@ void handlePiped(string uin)
   waitpid(pid_2,NULL,0);
 }
 
-bool isOutfileSet(string input)
+void handleDoublePiped(string uin)
 {
-  size_t found = input.find(">");
-  if(found != string::npos)
-  {
-     return true;
+  QuashOperation op;
+  pid_t pid_1, pid_2, pid_3;
+
+  int p1[2], p2[2];
+  pipe(p1);
+  pipe(p2);
+
+  pid_1 = fork();
+  if(pid_1 == 0){
+    //do first operation and write to write end of pipe
+    //get first op
+    op = getOp(pipeFirstCommand(uin));
+    dup2(p1[1], STDOUT_FILENO);
+    close(p1[0]);
+    close(p2[0]);
+    close(p2[1]);
+    runOp(op, pipeFirstCommand(uin));
+    exit(0);
   }
-  return false;
-}
 
-string getOutfile(string input)
-{
-  size_t found = input.find(">");
-  if(found != string::npos)
-  {
-     auto filename = input.substr(input.find_first_of('>')+2, input.find_last_of('.')+4);
-     return filename;
+  pid_2 = fork();
+  if(pid_2 == 0){
+    //get second op
+    op = getOp(doublePipeSecondCommand(uin));
+    //do second operation with stdin from read end of pipe
+    dup2(p1[0], STDIN_FILENO);
+    dup2(p2[1],STDOUT_FILENO);
+    close(p1[1]);
+    close(p2[0]);
+    runOp(op, doublePipeSecondCommand(uin));
+    exit(0);
   }
-  return "-1";
-}
 
-string commandToOutfile(string input)
-{
-     auto command = input.substr(0, input.find_first_of(">") -1 );
-     return command;
-}
-
-bool isBackgroundProc(string input)
-{
-  size_t found = input.find("&");
-  if(found != string::npos)
-  {
-    return true;
+  pid_3 = fork();
+  if(pid_3 == 0){
+    //get second op
+    op = getOp(doublePipeThirdCommand(uin));
+    //do second operation with stdin from read end of pipe
+    dup2(p2[0], STDIN_FILENO);
+    close(p1[1]);
+    runOp(op, doublePipeThirdCommand(uin));
+    exit(0);
   }
-  return false;
-}
 
-string getBackgroundCommand(string input)
-{
-     auto commandToRunInBackground = input.substr(0, input.find_last_of("&") -1);
-     return commandToRunInBackground;
+  close(p1[0]);
+  close(p1[1]);
+  close(p2[0]);
+  close(p2[1]);
+  waitpid(pid_1,NULL,0);
+  waitpid(pid_2,NULL,0);
+  waitpid(pid_3,NULL,0);
 }
 
 void signalHandler(int sig)
@@ -551,16 +656,13 @@ void signalHandler(int sig)
     if(sigPID == jobsVector[i].processId)
     {
       //Print job is finished
-      printf("\n[%d] %d finished %s\n",jobsVector[i].jobId,jobsVector[i].processId,jobsVector[i].commandRan.c_str());
-
+      cout<<endl<<"["<<jobsVector[i].jobId<<"] "<<jobsVector[i].processId<<" finished "<<jobsVector[i].commandRan<<flush;
       //Clean up vector
       jobsVector.erase(jobsVector.begin()+ i);
       runningJobCount--;
-      fflush(stdout);
     }
   }
 }
-
 
 int main(int argc, char **argv, char **envp)
 {
@@ -579,6 +681,19 @@ int main(int argc, char **argv, char **envp)
     //Assigns the user input to a string
     std::string uin = prompt();
 
+
+    if(isPiped(uin))
+    {
+      if(isSecondPipe(uin))
+      {
+        handleDoublePiped(uin);
+      }
+      else
+      {
+        handlePiped(uin);
+      }
+      uin = "";
+    }
     //Checks if the user has designated command as background Process
     //If it has the signal handler for sigchild is changed and the stdout for the child is changed
     if(isBackgroundProc(uin))
@@ -596,7 +711,7 @@ int main(int argc, char **argv, char **envp)
       if(pid == 0)
       {
         //just for testing to simulate a process still running
-        sleep(5);
+        sleep(1);
         exit(0);
       }
       //in case of Error
@@ -613,20 +728,21 @@ int main(int argc, char **argv, char **envp)
     // If user input has a >, changes STDOUT to designated output file and reassigns uin to just the command
     if(isOutfileSet(uin))
     {
-        fflush(stdout);
-        freopen(getOutfile(uin).c_str(), "w",stdout);
-        uin = commandToOutfile(uin);
+      fflush(stdout);
+      freopen(getOutfile(uin).c_str(), "w",stdout);
+      uin = commandToOutfile(uin);
     }
 
-    //If users input contains a | this if statement handles it
-    if(isPiped(uin))
+    if(isInfileSet(uin))
     {
-      handlePiped(uin);
+      freopen(getInfile(uin).c_str(), "r",stdin);
+      uin = commandReadingFromFile(uin);
     }
+    //If users input contains a | this if statement handles it
 
     op = getOp(uin);
     runOp(op, uin);
-
+    previousCommand = uin;
     fflush(stdout);
     dup2(saved_stdout, STDOUT_FILENO);
     dup2(saved_stdin,STDIN_FILENO);
