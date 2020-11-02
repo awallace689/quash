@@ -1,5 +1,11 @@
 /*
  * Compile with 'make quash'.
+ *
+ * 
+ * Made by:
+ *
+ *  Adam Wallace
+ *  Chase Odgers
  */
 
 #include <string>
