@@ -18,11 +18,17 @@ using namespace std;
 
 // ref char* used in splitString, function loses scope from exec callv
 char *deleteMe;
-int jobid =0;
+
+//preserves stdout and stdin
 int saved_stdout;
 int saved_stdin;
-string backgroundcommand;
-string jobStrings[100];
+int runningJobCount=0;
+struct jobStruct{
+  int jobId;
+  int processId;
+  string commandRan;
+};
+vector<jobStruct> jobsVector;
 std::string TITLE =
     "\n #####\n"
     "#     # #    #   ##    ####  #    #\n"
@@ -336,10 +342,12 @@ void handleExecWithParam(std::string input)
 
 void handleJobs(string input)
 {
-  for(int i=0; i<99; i++)
-  {
-    cout<<jobStrings[i];
-  }
+    for(int i=0; i<jobsVector.size(); i++)
+    {
+        //Print job is finished
+        printf("[%d] %d %s\n",jobsVector[i].jobId,jobsVector[i].processId,jobsVector[i].commandRan.c_str());
+    }
+
 }
 //PIPE HANDLING
 bool isPiped(string input)
@@ -530,8 +538,26 @@ string getBackgroundCommand(string input)
 
 void signalHandler(int sig)
 {
-  //decrement the current job count
+  fflush(stdout);
+  dup2(saved_stdout, STDOUT_FILENO);
+  dup2(saved_stdin,STDIN_FILENO);
+  int sigPID,status;
+  sigPID = waitpid(-1,&status,WNOHANG);
+  //cout<<sigPID<<"<- SIGPID"<<endl;
+  if(sigPID <= 0){return;}
+  for(int i=0; i<jobsVector.size(); i++)
+  {
+    if(sigPID == jobsVector[i].processId)
+    {
+      //Print job is finished
+      printf("[%d] %d finished %s",jobsVector[i].jobId,jobsVector[i].processId,jobsVector[i].commandRan.c_str());
+      //Clean up vector
+      jobsVector.erase(jobsVector.begin()+ i);
+      runningJobCount--;
+    }
+  }
 }
+
 
 int main(int argc, char **argv, char **envp)
 {
@@ -554,8 +580,11 @@ int main(int argc, char **argv, char **envp)
     //If it has the signal handler for sigchild is changed and the stdout for the child is changed
     if(isBackgroundProc(uin))
     {
+      uin = getBackgroundCommand(uin);
+
       //increment the count of the current jobs
-      int jobid++;
+      runningJobCount++;
+    //  jobsVector.push_back(jobStruct());
       //Assign signal to signal handler prior to forking
       signal(SIGCHLD,signalHandler);
       //fork and assign process id to pid
@@ -564,29 +593,32 @@ int main(int argc, char **argv, char **envp)
       if(pid == 0)
       {
         //just for testing to simulate a process still running
-        sleep(10);
+        sleep(5);
+        exit(0);
       }
       //in case of Error
-      if(pid<0){break;}
+      //if(pid<0){break;}
       //in the parent
       else
       {
-        //Print that the process has started
-        printf("[%d] %d running in background",jobid,pid);
-
+        //Create a job and store in jobsArray
+        cout<<"["<<runningJobCount<<"]"<<pid<<" running in background";
+        jobsVector.push_back({runningJobCount, pid, uin});
       }
 
     }
 
     // If user input has a >, changes STDOUT to designated output file and reassigns uin to just the command
-    if(isOutfileSet(uin)){
+    if(isOutfileSet(uin))
+    {
         fflush(stdout);
         freopen(getOutfile(uin).c_str(), "w",stdout);
         uin = commandToOutfile(uin);
     }
 
     //If users input contains a | this if statement handles it
-    if(isPiped(uin)){
+    if(isPiped(uin))
+    {
       handlePiped(uin);
     }
 
