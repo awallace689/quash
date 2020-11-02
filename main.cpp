@@ -552,7 +552,7 @@ void signalHandler(int sig)
     {
       //Print job is finished
       printf("\n[%d] %d finished %s\n",jobsVector[i].jobId,jobsVector[i].processId,jobsVector[i].commandRan.c_str());
-      cin >> "\n";
+
       //Clean up vector
       jobsVector.erase(jobsVector.begin()+ i);
       runningJobCount--;
