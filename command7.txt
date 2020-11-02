@@ -1,0 +1,4 @@
+file7
+set MYVAR="NEW_ENV_VAR"
+file7
+quit
