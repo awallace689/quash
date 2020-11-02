@@ -9,7 +9,6 @@
 #include <unistd.h>
 #include <regex>
 #include <vector>
-#include<linux/limits.h> //Used because my compiler was failing to find library for PATH_MAX
 #include <sys/wait.h> //Compiler wasnt se
 using namespace std;
 /**************************************************
@@ -46,10 +45,9 @@ enum QuashOperation
   Exit = 2,
   ExecNoParam = 3, // ./idonthaveparemeters or /test/idonthaveparameters
   ExecWithParam = 4,
-  SetPath = 5,
-  SetHome = 6,
-  Cd = 7,
-  Jobs = 8,
+  Set = 5, 
+  Cd = 6,
+  Jobs = 7,
 };
 
 /**************************************************
@@ -82,7 +80,7 @@ char *splitString(std::string input, char **outArr, std::string delimiters)
 // trim pwd to current directory and append to prompt prefix
 std::string getPromptPrefix()
 {
-  char c_str[PATH_MAX];
+  char c_str[1024];
   std::string pwd = getcwd(c_str, sizeof(c_str));
   auto lastSlashIndex = pwd.find_last_of("/");
   if (lastSlashIndex != 0)
@@ -126,19 +124,9 @@ bool isChangeDir(std::string in)
   return false;
 }
 
-bool isSetHome(std::string in)
+bool isSet(std::string in)
 {
-  if (std::regex_match(in, std::regex("set HOME=\".*\"")))
-  {
-    return true;
-  }
-
-  return false;
-}
-
-bool isSetPath(std::string in)
-{
-  if (std::regex_match(in, std::regex("set PATH=\".*\"")))
+  if (std::regex_match(in, std::regex("set [A-Za-z]+=\".*\"")))
   {
     return true;
   }
@@ -232,25 +220,15 @@ void handleChangeDir(std::string input)
   }
 }
 
-void handleSetHome(std::string input)
+void handleSet(std::string input)
 {
+  auto varname = input.substr(input.find_first_of(' ') + 1, input.find_first_of('=') - input.find_first_of(' ') - 1);
   auto firstQuoteAndRest = input.substr(input.find_first_of('\"') + 1, std::string::npos);
-  auto newHome = firstQuoteAndRest.substr(0, firstQuoteAndRest.find_first_of('\"'));
+  auto value = firstQuoteAndRest.substr(0, firstQuoteAndRest.find_first_of('\"'));
 
-  if (!(setenv("HOME", newHome.c_str(), 1) == 0))
+  if (!(setenv(varname.c_str(), value.c_str(), 1) == 0))
   {
-    echo("quash: set: Error setting home.\n");
-  }
-}
-
-void handleSetPath(std::string input)
-{
-  auto firstQuoteAndRest = input.substr(input.find_first_of('\"') + 1, std::string::npos);
-  auto newPath = firstQuoteAndRest.substr(0, firstQuoteAndRest.find_first_of('\"'));
-
-  if (!(setenv("PATH", newPath.c_str(), 1) == 0))
-  {
-    echo("quash: set: Error setting path.\n");
+    echo("quash: set: Error setting environment variable.\n");
   }
 }
 
@@ -385,19 +363,15 @@ string pipeSecondCommand(string input)
 // the string corresponds with.
 QuashOperation getOp(std::string in)
 {
-  if (isSetPath(in))
+  if (isSet(in))
   {
-    return SetPath;
+    return Set;
   }
   else if (isJobs(in))
   {
     return Jobs;
   }
-  else if (isSetHome(in))
-  {
-    return SetHome;
-  }
-  else if (isChangeDir(in))
+   else if (isChangeDir(in))
   {
     return Cd;
   }
@@ -441,12 +415,8 @@ void runOp(QuashOperation op, std::string input)
     handleExecNoParam(input);
     break;
 
-    case SetPath:
-    handleSetPath(input);
-    break;
-
-    case SetHome:
-    handleSetHome(input);
+    case Set:
+    handleSet(input);
     break;
 
     case Cd:
