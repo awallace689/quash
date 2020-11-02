@@ -602,7 +602,7 @@ int main(int argc, char **argv, char **envp)
       else
       {
         //Create a job and store in jobsArray
-        cout<<"["<<runningJobCount<<"]"<<pid<<" running in background";
+        cout<<"["<<runningJobCount<<"]"<<pid<<" running in background"<<endl;
         jobsVector.push_back({runningJobCount, pid, uin});
       }
 
