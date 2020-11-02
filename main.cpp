@@ -268,8 +268,10 @@ void handleError(std::string input)
   {
     command = input;
   }
-
+  //allows for enter key to be pressed without sending error
+  if(input != ""){
   echo("quash: command not found: " + command + " \n");
+  }
 }
 
 void handleExecNoParam(std::string input)
@@ -538,22 +540,23 @@ string getBackgroundCommand(string input)
 
 void signalHandler(int sig)
 {
-  fflush(stdout);
   dup2(saved_stdout, STDOUT_FILENO);
   dup2(saved_stdin,STDIN_FILENO);
   int sigPID,status;
+
   sigPID = waitpid(-1,&status,WNOHANG);
-  //cout<<sigPID<<"<- SIGPID"<<endl;
-  if(sigPID <= 0){return;}
+
   for(int i=0; i<jobsVector.size(); i++)
   {
     if(sigPID == jobsVector[i].processId)
     {
       //Print job is finished
-      printf("[%d] %d finished %s",jobsVector[i].jobId,jobsVector[i].processId,jobsVector[i].commandRan.c_str());
+      printf("\n[%d] %d finished %s\n",jobsVector[i].jobId,jobsVector[i].processId,jobsVector[i].commandRan.c_str());
+      cin >> "\n";
       //Clean up vector
       jobsVector.erase(jobsVector.begin()+ i);
       runningJobCount--;
+      fflush(stdout);
     }
   }
 }
@@ -605,7 +608,6 @@ int main(int argc, char **argv, char **envp)
         cout<<"["<<runningJobCount<<"]"<<pid<<" running in background"<<endl;
         jobsVector.push_back({runningJobCount, pid, uin});
       }
-
     }
 
     // If user input has a >, changes STDOUT to designated output file and reassigns uin to just the command
